@@ -1,6 +1,6 @@
 # Advanced Port Scanner
 
-This script is an advanced port scanner that allows you to identify open, closed, and filtered ports on one or more specified targets. It supports various scanning techniques such as TCP, UDP, and SYN scans, and offers advanced features like service version detection, OS detection, distributed scanning, and machine learning-based data analysis.
+- This script is an advanced port scanner that allows you to identify open, closed, and filtered ports on one or more specified targets. It supports various scanning techniques such as TCP, UDP, and SYN scans, and offers advanced features like service version detection, OS detection, distributed scanning, and machine learning-based data analysis.
 ---
 
 ## Key Features
