@@ -260,3 +260,12 @@ This script is an advanced port scanner that allows you to identify open, closed
 ## License
     
 - This project is licensed under the MIT License. For more information, see the [LICENSE](https://github.com/MrAmirRezaie/networkTool/blob/main/LICENSE) file.
+
+## Contact
+For questions, feedback, or bug reports, contact the maintainer:
+- **Email**: MrAmirRezaie70@gmail.com
+- **Telegram**: [@MrAmirRezaie](https://t.me/MrAmirRezaie)
+- **GitHub**: [MrAmirRezaie](https://github.com/MrAmirRezaie/)
+---
+
+**Enjoy using the Advanced Port Scanner! 🚀**
