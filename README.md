@@ -259,4 +259,4 @@ This script is an advanced port scanner that allows you to identify open, closed
 
 ## License
     
-- This project is licensed under the MIT License. For more information, see the [LICENSE]() file.
+- This project is licensed under the MIT License. For more information, see the [LICENSE](https://github.com/MrAmirRezaie/networkTool/blob/main/LICENSE) file.
