@@ -35,9 +35,9 @@
 
 - **Basic Scan**:
   - To scan a target with the default port range (1-1024):
-        ```bash
-        python main.py 192.168.1.1
-        ```
+      ```bash
+      python main.py 192.168.1.1
+      ```
 
 - **Scan with Specific Port Range**:
   - To scan a target with a specific port range:
