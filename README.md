@@ -1,6 +1,6 @@
 # Advanced Port Scanner
 
-This script is an advanced port scanner that allows you to identify open, closed, and filtered ports on one or more specified targets. It supports various scanning techniques such as TCP, UDP, and SYN scans, and offers advanced features like service version detection, OS detection, distributed scanning, and machine learning-based data analysis.
+This script is an advanced port scanner designed to identify open, closed, and filtered ports on one or more specified targets. It supports various scanning techniques, including TCP, UDP, and SYN scans, and offers advanced features such as service version detection, OS detection, distributed scanning, and machine learning-based data analysis.
 
 ---
 
@@ -15,12 +15,16 @@ This script is an advanced port scanner that allows you to identify open, closed
 - **Alerting**: Send alerts via email or webhook.
 - **IoT Device Identification**: Identify IoT devices based on open ports.
 - **Vulnerability Assessment**: Evaluate vulnerabilities in IoT devices and open ports.
+- **Scheduled Scans**: Perform scans at regular intervals.
+- **Encryption**: Encrypt scan results before saving or sending.
+- **Historical Reports**: Generate reports based on past scan results.
+- **Website Vulnerability Scanning**: Scan websites for common vulnerabilities such as SQL Injection, XSS, and more.
 
 ---
 
 ## Installation
 
-- To use this script, ensure you have Python 3.7 or higher installed. Then, install the required libraries:
+- Ensure you have Python 3.7 or higher installed. Then, install the required libraries:
 
     ```bash
     pip install -r requirements.txt
@@ -176,6 +180,12 @@ This script is an advanced port scanner that allows you to identify open, closed
     python main.py 192.168.1.1 --generate-historical-report
     ```
 
+### **Scan Website for Vulnerabilities**:
+- To scan a website for common vulnerabilities:
+    ```bash
+    python main.py http://example.com --scan-website
+    ```
+
 ---
 
 ## Command-Line Options
@@ -257,6 +267,63 @@ This script is an advanced port scanner that allows you to identify open, closed
     ```bash
     python main.py 192.168.1.1 --schedule 1h
     ```
+
+---
+
+## Detailed Function Descriptions
+
+- **Port Scanning Functions**:
+    - `scan_tcp_port(ip: str, port: int, timeout: int = 1, version_detection: bool = False, os_detection: bool = False)`:
+        - Scans a TCP port on the target IP.
+        - Optionally detects service version and OS.
+        - Returns a tuple containing the port, status (open/closed), and service.
+    - `scan_udp_port(ip: str, port: int, timeout: int = 1)`:
+        - Scans a UDP port on the target IP.
+        - Returns a tuple containing the port, status (open/closed), and service.
+    - `scan_syn_port(ip: str, port: int, timeout: int = 1)`:
+        - Performs a SYN scan on the target IP.
+        - Returns a tuple containing the port, status (open/closed), and service.
+    - `1async_scan_tcp_port(ip: str, port: int, timeout: int = 1, version_detection: bool = False, os_detection: bool = False)`:
+        - Asynchronously scans a TCP port on the target IP.
+        - Optionally detects service version and OS.
+        - Returns a tuple containing the port, status (open/closed), and service.
+
+- **Advanced Features**
+    - `advanced_data_analysis(results: List[Dict[str, Any]])`:
+        - Performs advanced data analysis using machine learning (Random Forest).
+        - Analyzes scan results to identify suspicious patterns and predict potential attacks.
+    - `detect_suspicious_traffic(traffic_data: List[Dict[str, Any]])`:
+        - Detects suspicious traffic patterns based on packet size and other factors.
+    - `detect_anomalies(traffic_data: List[Dict[str, Any]])`:
+        - Detects anomalies in traffic data using Isolation Forest.
+    - `generate_security_recommendations(analysis: Dict[str, int])`:
+        - Generates security recommendations based on scan analysis.
+    - `predict_attacks(results: List[Dict[str, Any]])`:
+        - Predicts potential attacks using machine learning (Random Forest).
+
+- **IoT and Vulnerability Assessment**
+    - `identify_iot_devices(results: List[Dict[str, Any]])`:
+        - Identifies IoT devices based on open ports and services.
+    - `evaluate_iot_vulnerabilities(results: List[Dict[str, Any]])`:
+        - Evaluates vulnerabilities in IoT devices based on open ports and services.
+
+- **Historical and Comparative Analysis**
+    - `compare_with_previous_scan(current_results: List[Dict[str, Any]], previous_results_file: str)`:
+        - Compares current scan results with previous scan results to identify changes.
+    - `generate_historical_report(scan_history_file: str)`:
+        - Generates a historical report based on past scan results.
+
+- **Website Vulnerability Scanning**
+    - `scan_website(url: str)`:
+        - Scans a website for common vulnerabilities such as SQL Injection, XSS, insecure code, SSL/TLS issues, and more.
+
+---
+
+## Additional Notes
+- The script supports multiple output formats, including JSON, CSV, XML, HTML, and PDF.
+- It can generate charts and maps based on scan results.
+- The script can be configured to run scheduled scans at regular intervals.
+- It supports encryption of scan results for secure storage and transmission.
 
 ---
 
