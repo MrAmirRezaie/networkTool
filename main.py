@@ -36,14 +36,12 @@ import smtplib
 from email.mime.text import MIMEText
 import folium
 import requests
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import padding
-import hashlib
-import hmac
-import base64
-from typing import List, Dict, Any, Optional
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
+import re
+import vulners
 import tarfile
+from typing import Optional, Dict, List, Any, Tuple
 
 # Scapy settings to suppress unnecessary messages
 conf.verb = 0
@@ -101,32 +99,29 @@ WEBHOOK_URL = 'https://hooks.slack.com/services/your/webhook/url'
 
 # Function to download GeoLite2 database
 def download_geolite2_database():
-    # Check if the database already exists
+    """
+    Download the GeoLite2 database from MaxMind.
+    """
     if os.path.exists(GEOIP_DATABASE_PATH):
         logging.info("GeoLite2 database already exists.")
         return
 
-    # Create the directory if it doesn't exist
     os.makedirs(os.path.dirname(GEOIP_DATABASE_PATH), exist_ok=True)
 
-    # Download the GeoLite2 database
     try:
         logging.info("Downloading GeoLite2 database...")
         response = requests.get(
             f"{GEOIP_DOWNLOAD_URL}?edition_id=GeoLite2-City&license_key={LICENSE_KEY}&suffix=tar.gz", stream=True)
         response.raise_for_status()
 
-        # Save the downloaded file
         tar_path = 'GeoLite2-City.tar.gz'
         with open(tar_path, 'wb') as f:
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
 
-        # Extract the tar.gz file
         with tarfile.open(tar_path, 'r:gz') as tar:
             tar.extractall()
 
-        # Find the .mmdb file in the extracted directory
         for root, dirs, files in os.walk('.'):
             for file in files:
                 if file.endswith('.mmdb'):
@@ -134,7 +129,6 @@ def download_geolite2_database():
                     os.rename(mmdb_path, GEOIP_DATABASE_PATH)
                     break
 
-        # Clean up the tar.gz file and extracted directory
         os.remove(tar_path)
         for root, dirs, files in os.walk('.'):
             for dir in dirs:
@@ -152,6 +146,12 @@ download_geolite2_database()
 
 # Function to get geographical location of an IP
 def get_geolocation(ip: str) -> Optional[Dict[str, Any]]:
+    """
+    Get the geographical location of an IP address using the GeoLite2 database.
+
+    :param ip: IP address to lookup
+    :return: Dictionary containing city, country, latitude, and longitude
+    """
     try:
         with geoip2.database.Reader(GEOIP_DATABASE_PATH) as reader:
             response = reader.city(ip)
@@ -168,8 +168,12 @@ def get_geolocation(ip: str) -> Optional[Dict[str, Any]]:
 
 # Function to create a map with IP locations
 def create_ip_map(results: List[Dict[str, Any]]) -> None:
+    """
+    Create a map with markers for each IP location.
+
+    :param results: List of scan results
+    """
     try:
-        # Create a map centered at the first IP's location
         first_ip = results[0]["ip"]
         first_location = get_geolocation(first_ip)
         if first_location:
@@ -177,7 +181,6 @@ def create_ip_map(results: List[Dict[str, Any]]) -> None:
         else:
             ip_map = folium.Map(location=[0, 0], zoom_start=2)
 
-        # Add markers for each IP
         for result in results:
             location = get_geolocation(result["ip"])
             if location:
@@ -186,7 +189,6 @@ def create_ip_map(results: List[Dict[str, Any]]) -> None:
                     popup=f"IP: {result['ip']}, Port: {result['port']}, Status: {result['status']}",
                 ).add_to(ip_map)
 
-        # Save the map to an HTML file
         ip_map.save("ip_locations_map.html")
         logging.info("IP location map saved to ip_locations_map.html")
     except Exception as e:
@@ -195,7 +197,17 @@ def create_ip_map(results: List[Dict[str, Any]]) -> None:
 
 # Function to scan TCP port with service and OS detection
 def scan_tcp_port(ip: str, port: int, timeout: int = 1, version_detection: bool = False, os_detection: bool = False) -> \
-tuple[int, str, str]:
+Tuple[int, str, str]:
+    """
+    Scan a TCP port and optionally detect service version and OS.
+
+    :param ip: Target IP address
+    :param port: Port to scan
+    :param timeout: Timeout for the scan
+    :param version_detection: Enable service version detection
+    :param os_detection: Enable OS detection
+    :return: Tuple containing port, status, and service
+    """
     try:
         family = socket.AF_INET6 if ":" in ip else socket.AF_INET
         sock = socket.socket(family, socket.SOCK_STREAM)
@@ -207,7 +219,6 @@ tuple[int, str, str]:
             except:
                 service = "unknown"
             if version_detection:
-                # Attempt to get service version
                 try:
                     sock.send(b"GET / HTTP/1.1\r\nHost: example.com\r\n\r\n")
                     banner = sock.recv(1024).decode('utf-8', errors='ignore')
@@ -215,7 +226,6 @@ tuple[int, str, str]:
                 except:
                     pass
             if os_detection:
-                # Attempt to get OS information
                 try:
                     sock.send(b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")
                     os_info = sock.recv(1024).decode('utf-8', errors='ignore')
@@ -230,7 +240,15 @@ tuple[int, str, str]:
 
 
 # Function to scan UDP port
-def scan_udp_port(ip: str, port: int, timeout: int = 1) -> tuple[int, str, str]:
+def scan_udp_port(ip: str, port: int, timeout: int = 1) -> Tuple[int, str, str]:
+    """
+    Scan a UDP port.
+
+    :param ip: Target IP address
+    :param port: Port to scan
+    :param timeout: Timeout for the scan
+    :return: Tuple containing port, status, and service
+    """
     try:
         family = socket.AF_INET6 if ":" in ip else socket.AF_INET
         sock = socket.socket(family, socket.SOCK_DGRAM)
@@ -249,7 +267,15 @@ def scan_udp_port(ip: str, port: int, timeout: int = 1) -> tuple[int, str, str]:
 
 
 # Function to scan SYN port
-def scan_syn_port(ip: str, port: int, timeout: int = 1) -> tuple[int, str, str]:
+def scan_syn_port(ip: str, port: int, timeout: int = 1) -> Tuple[int, str, str]:
+    """
+    Perform a SYN scan on a port.
+
+    :param ip: Target IP address
+    :param port: Port to scan
+    :param timeout: Timeout for the scan
+    :return: Tuple containing port, status, and service
+    """
     try:
         packet = IP(dst=ip) / TCP(dport=port, flags="S")
         response = sr1(packet, timeout=timeout, verbose=0)
@@ -266,7 +292,17 @@ def scan_syn_port(ip: str, port: int, timeout: int = 1) -> tuple[int, str, str]:
 
 # Function to scan TCP port using async
 async def async_scan_tcp_port(ip: str, port: int, timeout: int = 1, version_detection: bool = False,
-                              os_detection: bool = False) -> tuple[int, str, str]:
+                              os_detection: bool = False) -> Tuple[int, str, str]:
+    """
+    Asynchronously scan a TCP port.
+
+    :param ip: Target IP address
+    :param port: Port to scan
+    :param timeout: Timeout for the scan
+    :param version_detection: Enable service version detection
+    :param os_detection: Enable OS detection
+    :return: Tuple containing port, status, and service
+    """
     try:
         family = socket.AF_INET6 if ":" in ip else socket.AF_INET
         sock = socket.socket(family, socket.SOCK_STREAM)
@@ -278,7 +314,6 @@ async def async_scan_tcp_port(ip: str, port: int, timeout: int = 1, version_dete
             except:
                 service = "unknown"
             if version_detection:
-                # Attempt to get service version
                 try:
                     sock.send(b"GET / HTTP/1.1\r\nHost: example.com\r\n\r\n")
                     banner = sock.recv(1024).decode('utf-8', errors='ignore')
@@ -286,7 +321,6 @@ async def async_scan_tcp_port(ip: str, port: int, timeout: int = 1, version_dete
                 except:
                     pass
             if os_detection:
-                # Attempt to get OS information
                 try:
                     sock.send(b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")
                     os_info = sock.recv(1024).decode('utf-8', errors='ignore')
@@ -305,12 +339,22 @@ async def async_scan_tcp_port(ip: str, port: int, timeout: int = 1, version_dete
 
 # Function to rate limit scanning
 def rate_limit(rate: int) -> None:
+    """
+    Rate limit the scanning process.
+
+    :param rate: Number of requests per second
+    """
     if rate > 0:
         time.sleep(1 / rate)
 
 
 # Function to start Tor
 def start_tor() -> Optional[stem.process.LaunchedTor]:
+    """
+    Start the Tor process for anonymous scanning.
+
+    :return: Tor process object
+    """
     try:
         tor_process = stem.process.launch_tor_with_config(
             config={
@@ -327,6 +371,12 @@ def start_tor() -> Optional[stem.process.LaunchedTor]:
 
 # Function to encrypt data
 def encrypt_data(data: str) -> Optional[bytes]:
+    """
+    Encrypt data using Fernet encryption.
+
+    :param data: Data to encrypt
+    :return: Encrypted data
+    """
     try:
         encrypted_data = cipher_suite.encrypt(data.encode())
         return encrypted_data
@@ -337,6 +387,12 @@ def encrypt_data(data: str) -> Optional[bytes]:
 
 # Function to decrypt data
 def decrypt_data(encrypted_data: bytes) -> Optional[str]:
+    """
+    Decrypt data using Fernet encryption.
+
+    :param encrypted_data: Encrypted data
+    :return: Decrypted data
+    """
     try:
         decrypted_data = cipher_suite.decrypt(encrypted_data).decode()
         return decrypted_data
@@ -347,6 +403,12 @@ def decrypt_data(encrypted_data: bytes) -> Optional[str]:
 
 # Function to load configuration from a file
 def load_config(config_file: str) -> Optional[Dict[str, Any]]:
+    """
+    Load configuration from a JSON file.
+
+    :param config_file: Path to the configuration file
+    :return: Dictionary containing configuration
+    """
     try:
         with open(config_file, 'r') as f:
             config = json.load(f)
@@ -358,6 +420,12 @@ def load_config(config_file: str) -> Optional[Dict[str, Any]]:
 
 # Function to save configuration to a file
 def save_config(config: Dict[str, Any], config_file: str) -> None:
+    """
+    Save configuration to a JSON file.
+
+    :param config: Configuration dictionary
+    :param config_file: Path to the configuration file
+    """
     try:
         with open(config_file, 'w') as f:
             json.dump(config, f, indent=4)
@@ -368,6 +436,12 @@ def save_config(config: Dict[str, Any], config_file: str) -> None:
 
 # Function to analyze data
 def analyze_data(results: List[Dict[str, Any]]) -> Dict[str, int]:
+    """
+    Analyze scan results and generate statistics.
+
+    :param results: List of scan results
+    :return: Dictionary containing analysis results
+    """
     analysis = {
         "total_ports_scanned": len(results),
         "open_ports": len([r for r in results if r["status"] == "open"]),
@@ -380,6 +454,13 @@ def analyze_data(results: List[Dict[str, Any]]) -> Dict[str, int]:
 
 # Function to save results in different formats
 def save_results(results: List[Dict[str, Any]], output_file: str, analysis: Optional[Dict[str, int]] = None) -> None:
+    """
+    Save scan results to a file in various formats.
+
+    :param results: List of scan results
+    :param output_file: Path to the output file
+    :param analysis: Analysis results to include in the output
+    """
     try:
         if output_file.endswith('.json'):
             with open(output_file, 'w') as f:
@@ -422,8 +503,13 @@ def save_results(results: List[Dict[str, Any]], output_file: str, analysis: Opti
 
 # Function to create charts
 def create_charts(results: List[Dict[str, Any]], output_file: str) -> None:
+    """
+    Create charts for scan results.
+
+    :param results: List of scan results
+    :param output_file: Base name for the output chart files
+    """
     try:
-        # Chart for open, closed, and filtered ports
         status_counts = {
             "open": len([r for r in results if r["status"] == "open"]),
             "closed": len([r for r in results if r["status"] == "closed"]),
@@ -436,7 +522,6 @@ def create_charts(results: List[Dict[str, Any]], output_file: str) -> None:
         plt.savefig(f"{output_file}_status_chart.png")
         plt.close()
 
-        # Interactive chart with Plotly
         df = px.data.tips()
         fig = px.bar(x=list(status_counts.keys()), y=list(status_counts.values()), labels={'x': 'Status', 'y': 'Count'},
                      title="Port Status Distribution")
@@ -447,10 +532,14 @@ def create_charts(results: List[Dict[str, Any]], output_file: str) -> None:
 
 # Function to perform scheduled scans
 def scheduled_scan(config_file: str) -> None:
-    config = load_config(config_file)
+    """
+    Perform a scheduled scan based on a configuration file.
+
+    :param config_file: Path to the configuration file
+    """
+    config = load_config(args.config)
     if config:
         logging.info(_("Starting scheduled scan with config: {}").format(config))
-        # Perform scan based on config
         targets = config.get("targets", [])
         ports = config.get("ports", "1-1024")
         scan_type = config.get("type", "tcp")
@@ -458,7 +547,6 @@ def scheduled_scan(config_file: str) -> None:
         max_threads = config.get("max_threads", 100)
         rate_limit_value = config.get("rate_limit", 0)
 
-        # Convert port range to list
         if isinstance(ports, str):
             if '-' in ports:
                 start_port, end_port = map(int, ports.split('-'))
@@ -466,7 +554,6 @@ def scheduled_scan(config_file: str) -> None:
             else:
                 ports = list(map(int, ports.split(',')))
 
-        # Perform the scan
         all_results = []
         for target in targets:
             logging.info(_("Scanning target: {}").format(target))
@@ -475,35 +562,33 @@ def scheduled_scan(config_file: str) -> None:
             results = full_scan(target, ports, scan_type, timeout, max_threads)
             all_results.extend(results)
 
-        # Save results
         output_file = config.get("output", "scheduled_scan_results.json")
         save_results(all_results, output_file)
-
     else:
         logging.error(_("Failed to load config file for scheduled scan."))
 
 
 # Function for advanced data analysis with machine learning
 def advanced_data_analysis(results: List[Dict[str, Any]]) -> Optional[RandomForestClassifier]:
+    """
+    Perform advanced data analysis using machine learning.
+
+    :param results: List of scan results
+    :return: Trained Random Forest model
+    """
     try:
-        # Convert data to DataFrame
         df = pd.DataFrame(results)
-        # Add a dummy vulnerability column for demonstration
         df['vulnerability'] = np.random.choice([0, 1],
                                                size=len(df))  # Randomly assign vulnerabilities for demonstration
 
-        # Features and labels
         X = df[['port', 'status']]
         y = df['vulnerability']
 
-        # Split data into training and testing sets
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-        # Train Random Forest model
         model = RandomForestClassifier(n_estimators=100, random_state=42)
         model.fit(X_train, y_train)
 
-        # Predict and evaluate the model
         y_pred = model.predict(X_test)
         accuracy = accuracy_score(y_test, y_pred)
         logging.info(f"Model accuracy: {accuracy}")
@@ -516,8 +601,13 @@ def advanced_data_analysis(results: List[Dict[str, Any]]) -> Optional[RandomFore
 
 # Function to detect suspicious traffic
 def detect_suspicious_traffic(traffic_data: List[Dict[str, Any]]) -> Optional[List[Dict[str, Any]]]:
+    """
+    Detect suspicious traffic patterns.
+
+    :param traffic_data: List of traffic data
+    :return: List of suspicious traffic patterns
+    """
     try:
-        # Analyze network traffic for suspicious behavior
         suspicious_patterns = []
         for entry in traffic_data:
             if entry['packet_size'] > 1000:  # Example: Large packets are suspicious
@@ -530,18 +620,20 @@ def detect_suspicious_traffic(traffic_data: List[Dict[str, Any]]) -> Optional[Li
 
 # Function to detect anomalies using Isolation Forest
 def detect_anomalies(traffic_data: List[Dict[str, Any]]) -> Optional[List[Dict[str, Any]]]:
+    """
+    Detect anomalies in traffic data using Isolation Forest.
+
+    :param traffic_data: List of traffic data
+    :return: List of anomalous traffic patterns
+    """
     try:
-        # Convert data to NumPy array
         data = np.array([entry['packet_size'] for entry in traffic_data]).reshape(-1, 1)
 
-        # Train Isolation Forest model
-        model = IsolationForest(contamination=0.01)  # Contamination is the percentage of anomalies
+        model = IsolationForest(contamination=0.01)
         model.fit(data)
 
-        # Predict anomalies
         anomalies = model.predict(data)
 
-        # Flag anomalous behavior
         suspicious_traffic = [traffic_data[i] for i, anomaly in enumerate(anomalies) if anomaly == -1]
         return suspicious_traffic
     except Exception as e:
@@ -551,6 +643,12 @@ def detect_anomalies(traffic_data: List[Dict[str, Any]]) -> Optional[List[Dict[s
 
 # Function to generate security recommendations
 def generate_security_recommendations(analysis: Dict[str, int]) -> List[str]:
+    """
+    Generate security recommendations based on scan analysis.
+
+    :param analysis: Analysis results
+    :return: List of security recommendations
+    """
     recommendations = []
 
     if analysis['open_ports'] > 10:
@@ -567,25 +665,25 @@ def generate_security_recommendations(analysis: Dict[str, int]) -> List[str]:
 
 # Function to predict potential attacks
 def predict_attacks(results: List[Dict[str, Any]]) -> Optional[RandomForestClassifier]:
+    """
+    Predict potential attacks using machine learning.
+
+    :param results: List of scan results
+    :return: Trained Random Forest model
+    """
     try:
-        # Convert data to DataFrame
         df = pd.DataFrame(results)
-        # Add a dummy vulnerability column for demonstration
         df['vulnerability'] = np.random.choice([0, 1],
                                                size=len(df))  # Randomly assign vulnerabilities for demonstration
 
-        # Features and labels
         X = df[['port', 'status']]
         y = df['vulnerability']
 
-        # Split data into training and testing sets
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-        # Train Random Forest model
         model = RandomForestClassifier(n_estimators=100, random_state=42)
         model.fit(X_train, y_train)
 
-        # Predict and evaluate the model
         y_pred = model.predict(X_test)
         accuracy = accuracy_score(y_test, y_pred)
         logging.info(f"Model accuracy: {accuracy}")
@@ -646,7 +744,6 @@ def evaluate_server_capacity(target_ip: str, target_port: int, max_rate: int = 1
         elapsed_time = time.time() - start_time
         results.append({"rate": rate, "elapsed_time": elapsed_time})
 
-    # Analyze results
     for result in results:
         logging.info(f"Rate: {result['rate']} req/s, Elapsed Time: {result['elapsed_time']}s")
 
@@ -660,11 +757,10 @@ def check_modbus(ip: str, port: int = 502) -> None:
     :param port: Modbus port (default 502)
     """
     try:
-        client = ModbusClient.ModbusTcpClient(ip, port, timeout=5)  # Set timeout to 5 seconds
+        client = ModbusClient.ModbusTcpClient(ip, port, timeout=5)
         client.connect()
         if client.connect():
             logging.info(f"Connected to Modbus device at {ip}:{port}")
-            # Read data from Modbus device
             response = client.read_holding_registers(address=0, count=10, unit=1)
             if not response.isError():
                 logging.info(f"Modbus data read successfully: {response.registers}")
@@ -690,11 +786,9 @@ def check_mqtt(broker_ip: str, port: int = 1883) -> None:
         client.connect(broker_ip, port, 60)
         logging.info(f"Connected to MQTT broker at {broker_ip}:{port}")
 
-        # Publish a message
         client.publish("test/topic", "Hello MQTT")
         logging.info("Message published to MQTT broker")
 
-        # Receive a message
         def on_message(client, userdata, msg):
             logging.info(f"Received message: {msg.payload.decode()}")
 
@@ -719,7 +813,7 @@ async def check_coap(ip: str, port: int = 5683) -> None:
     try:
         protocol = await coap.Context.create_client_context()
         request = coap.Message(code=coap.GET, uri=f"coap://{ip}:{port}/test")
-        response = await asyncio.wait_for(protocol.request(request).response, timeout=5)  # Set timeout to 5 seconds
+        response = await asyncio.wait_for(protocol.request(request).response, timeout=5)
         logging.info(f"CoAP response: {response.payload.decode()}")
     except Exception as e:
         logging.error(f"Error checking CoAP: {e}")
@@ -735,12 +829,11 @@ def check_encryption_protocols(ip: str, port: int) -> None:
     """
     try:
         context = ssl.create_default_context()
-        with socket.create_connection((ip, port), timeout=5) as sock:  # Set timeout to 5 seconds
+        with socket.create_connection((ip, port), timeout=5) as sock:
             with context.wrap_socket(sock, server_hostname=ip) as ssock:
                 logging.info(f"Connected to {ip}:{port} using {ssock.version()}")
                 cert = ssock.getpeercert()
                 logging.info(f"Certificate: {cert}")
-                # Check certificate validity
                 if cert:
                     not_after = datetime.strptime(cert['notAfter'], '%b %d %H:%M:%S %Y %Z')
                     if datetime.now() > not_after:
@@ -757,6 +850,7 @@ def identify_vulnerable_ports(results: List[Dict[str, Any]]) -> List[Dict[str, A
     Identify vulnerable ports that are commonly targeted by attacks.
 
     :param results: Port scan results
+    :return: List of vulnerable ports
     """
     vulnerable_ports = []
     for result in results:
@@ -771,15 +865,14 @@ def identify_insecure_config_files(target_ip: str) -> List[str]:
     Identify insecure configuration files such as .htaccess or FTP configurations with default passwords.
 
     :param target_ip: Target IP address
+    :return: List of insecure configuration files
     """
     insecure_files = []
     try:
-        # Check for .htaccess files
-        response = requests.get(f"http://{target_ip}/.htaccess", timeout=5)  # Set timeout to 5 seconds
+        response = requests.get(f"http://{target_ip}/.htaccess", timeout=5)
         if response.status_code == 200:
             insecure_files.append(".htaccess")
 
-        # Check FTP configurations with default credentials
         from ftplib import FTP
         ftp = FTP(target_ip)
         ftp.login("anonymous", "anonymous")
@@ -796,6 +889,7 @@ def identify_management_ports(results: List[Dict[str, Any]]) -> List[Dict[str, A
     Identify open management ports such as RDP, VNC, or Web Admin.
 
     :param results: Port scan results
+    :return: List of open management ports
     """
     management_ports = []
     for result in results:
@@ -810,6 +904,7 @@ def check_threat_intelligence(ip: str) -> bool:
     Check IP against a local list of known malicious IPs.
 
     :param ip: IP address to check
+    :return: True if IP is malicious, False otherwise
     """
     if ip in MALICIOUS_IPS:
         logging.warning(f"IP {ip} is flagged as malicious in local threat intelligence.")
@@ -864,6 +959,7 @@ def identify_iot_devices(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     Identify IoT devices based on open ports and services.
 
     :param results: Port scan results
+    :return: List of IoT devices
     """
     iot_devices = []
     for result in results:
@@ -878,6 +974,7 @@ def evaluate_iot_vulnerabilities(results: List[Dict[str, Any]]) -> List[str]:
     Evaluate vulnerabilities in IoT devices based on open ports and services.
 
     :param results: Port scan results
+    :return: List of IoT vulnerabilities
     """
     vulnerabilities = []
     for result in results:
@@ -899,6 +996,7 @@ def compare_with_previous_scan(current_results: List[Dict[str, Any]], previous_r
 
     :param current_results: Current scan results
     :param previous_results_file: File containing previous scan results
+    :return: Dictionary containing changes
     """
     try:
         if not os.path.exists(previous_results_file):
@@ -917,17 +1015,14 @@ def compare_with_previous_scan(current_results: List[Dict[str, Any]], previous_r
             "status_changes": [],
         }
 
-        # Check for new ports
         for port, result in current_ports.items():
             if port not in previous_ports:
                 changes["new_ports"].append(result)
 
-        # Check for closed ports
         for port, result in previous_ports.items():
             if port not in current_ports:
                 changes["closed_ports"].append(result)
 
-        # Check for status changes
         for port, current_result in current_ports.items():
             if port in previous_ports:
                 previous_result = previous_ports[port]
@@ -950,6 +1045,7 @@ def generate_historical_report(scan_history_file: str) -> Optional[Dict[str, Lis
     Generate a historical report based on past scan results.
 
     :param scan_history_file: File containing historical scan results
+    :return: Dictionary containing historical report
     """
     try:
         if not os.path.exists(scan_history_file):
@@ -1035,15 +1131,11 @@ def distributed_scan(targets: List[str], ports: List[int], scan_type: str = "tcp
     """
     results = []
     if workers:
-        # Distribute the scan across workers
         for worker in workers:
             logging.info(f"Distributing scan to worker: {worker}")
-            # Here you would typically send the scan task to the worker
-            # For simplicity, we assume the worker performs the same scan as the main function
             worker_results = full_scan(targets[0], ports, scan_type, timeout, max_threads)
             results.extend(worker_results)
     else:
-        # If no workers are specified, perform the scan locally
         results = full_scan(targets[0], ports, scan_type, timeout, max_threads)
 
     return results
@@ -1089,10 +1181,403 @@ async def async_full_scan(target: str, ports: List[int], scan_type: str = "tcp",
     return results
 
 
+# Function to resolve domain to IP
+def resolve_domain_to_ip(domain: str) -> Optional[str]:
+    """
+    Resolve a domain name to its IP address.
+
+    :param domain: Domain name to resolve
+    :return: IP address of the domain
+    """
+    try:
+        ip = socket.gethostbyname(domain)
+        return ip
+    except Exception as e:
+        logging.error(f"Error resolving domain {domain}: {e}")
+    return None
+
+
+# Function to check for SQL Injection vulnerabilities
+def check_sql_injection(url: str) -> bool:
+    """
+    Check for SQL Injection vulnerabilities in a given URL using multiple payloads.
+
+    :param url: URL to check
+    :return: True if SQL Injection vulnerability is detected, False otherwise
+    """
+    payloads = [
+        "' OR '1'='1",
+        "' OR '1'='1' --",
+        "' OR '1'='1' #",
+        "' OR '1'='1' /*",
+        "admin' --",
+        "admin' #",
+        "admin' /*",
+        "1' OR '1'='1",
+        "1' OR '1'='1' --",
+        "1' OR '1'='1' #",
+        "1' OR '1'='1' /*",
+        "1' OR '1'='1' OR '1'='1",
+        "1' OR '1'='1' OR '1'='1' --",
+        "1' OR '1'='1' OR '1'='1' #",
+        "1' OR '1'='1' OR '1'='1' /*",
+        "1' OR '1'='1' OR '1'='1' OR '1'='1",
+        "1' OR '1'='1' OR '1'='1' OR '1'='1' --",
+        "1' OR '1'='1' OR '1'='1' OR '1'='1' #",
+        "1' OR '1'='1' OR '1'='1' OR '1'='1' /*",
+    ]
+
+    for payload in payloads:
+        try:
+            response = requests.get(url + payload)
+            if "error" in response.text.lower() or "syntax" in response.text.lower():
+                return True
+        except Exception as e:
+            logging.error(f"Error checking SQL Injection for {url} with payload {payload}: {e}")
+    return False
+
+
+# Function to check for XSS vulnerabilities
+def check_xss(url: str) -> bool:
+    """
+    Check for XSS vulnerabilities in a given URL using multiple payloads.
+
+    :param url: URL to check
+    :return: True if XSS vulnerability is detected, False otherwise
+    """
+    payloads = [
+        "<script>alert('XSS')</script>",
+        "<img src=x onerror=alert('XSS')>",
+        "<svg/onload=alert('XSS')>",
+        "<body onload=alert('XSS')>",
+        "<iframe src=javascript:alert('XSS')>",
+        "<a href=javascript:alert('XSS')>Click Me</a>",
+        "<div onmouseover=alert('XSS')>Hover Me</div>",
+        "<input type=text value='<script>alert('XSS')</script>'>",
+        "<textarea><script>alert('XSS')</script></textarea>",
+        "<img src='x' onerror='alert(\"XSS\")'>",
+        "<svg><script>alert('XSS')</script></svg>",
+    ]
+
+    for payload in payloads:
+        try:
+            response = requests.get(url + payload)
+            if payload in response.text:
+                return True
+        except Exception as e:
+            logging.error(f"Error checking XSS for {url} with payload {payload}: {e}")
+    return False
+
+
+# Function to check for insecure HTML, CSS, and JavaScript
+def check_insecure_code(url: str) -> List[str]:
+    """
+    Check for insecure HTML, CSS, and JavaScript in a given URL with more detailed analysis.
+
+    :param url: URL to check
+    :return: List of insecure code patterns found
+    """
+    insecure_patterns = []
+    try:
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # Check for inline JavaScript
+        for script in soup.find_all('script'):
+            if script.get('src') is None:
+                script_content = script.string
+                if script_content:
+                    insecure_patterns.append(f"Inline JavaScript found: {script_content.strip()}")
+                else:
+                    insecure_patterns.append("Inline JavaScript found with no content.")
+
+        # Check for inline CSS
+        for style in soup.find_all('style'):
+            style_content = style.string
+            if style_content:
+                insecure_patterns.append(f"Inline CSS found: {style_content.strip()}")
+            else:
+                insecure_patterns.append("Inline CSS found with no content.")
+
+        # Check for insecure event handlers
+        insecure_events = ['onclick', 'onload', 'onerror', 'onmouseover', 'onkeypress']
+        for tag in soup.find_all():
+            for event in insecure_events:
+                if tag.has_attr(event):
+                    insecure_patterns.append(f"Insecure event handler '{event}' found in tag {tag.name}: {tag.attrs}")
+
+        # Check for insecure HTML attributes
+        insecure_attributes = ['style', 'href', 'src']
+        for tag in soup.find_all():
+            for attr in insecure_attributes:
+                if tag.has_attr(attr):
+                    attr_value = tag[attr]
+                    if attr == 'href' and re.match(r'javascript:', attr_value):
+                        insecure_patterns.append(
+                            f"Insecure 'href' attribute with JavaScript found in tag {tag.name}: {attr_value}")
+                    elif attr == 'src' and re.match(r'data:', attr_value):
+                        insecure_patterns.append(
+                            f"Insecure 'src' attribute with data URI found in tag {tag.name}: {attr_value}")
+                    elif attr == 'style' and re.search(r'expression\(', attr_value):
+                        insecure_patterns.append(
+                            f"Insecure 'style' attribute with CSS expression found in tag {tag.name}: {attr_value}")
+
+        # Check for insecure JavaScript patterns
+        for script in soup.find_all('script', src=True):
+            script_url = script['src']
+            if not script_url.startswith(('http://', 'https://')):
+                insecure_patterns.append(f"Insecure script source (non-HTTP/HTTPS): {script_url}")
+
+        # Check for insecure CSS patterns
+        for link in soup.find_all('link', rel='stylesheet'):
+            css_url = link['href']
+            if not css_url.startswith(('http://', 'https://')):
+                insecure_patterns.append(f"Insecure CSS source (non-HTTP/HTTPS): {css_url}")
+
+    except Exception as e:
+        logging.error(f"Error checking insecure code for {url}: {e}")
+    return insecure_patterns
+
+
+# Function to check SSL/TLS certificate validity and configuration
+def check_ssl_tls(url: str) -> Dict[str, Any]:
+    """
+    Check SSL/TLS certificate validity and configuration.
+
+    :param url: URL to check
+    :return: Dictionary containing SSL/TLS check results
+    """
+    try:
+        context = ssl.create_default_context()
+        with socket.create_connection((url.split('//')[1].split('/')[0], 443)) as sock:
+            with context.wrap_socket(sock, server_hostname=url.split('//')[1].split('/')[0]) as ssock:
+                cert = ssock.getpeercert()
+                not_after = datetime.strptime(cert['notAfter'], '%b %d %H:%M:%S %Y %Z')
+                is_valid = datetime.now() < not_after
+                return {
+                    "valid": is_valid,
+                    "expiry_date": cert['notAfter'],
+                    "issuer": cert['issuer'],
+                    "subject": cert['subject'],
+                }
+    except Exception as e:
+        logging.error(f"Error checking SSL/TLS for {url}: {e}")
+    return {"valid": False, "error": str(e)}
+
+
+# Function to check for the presence of security headers
+def check_security_headers(url: str) -> Dict[str, Any]:
+    """
+    Check for the presence of security headers.
+
+    :param url: URL to check
+    :return: Dictionary containing security headers check results
+    """
+    try:
+        response = requests.get(url)
+        headers = response.headers
+        security_headers = {
+            "Content-Security-Policy": headers.get("Content-Security-Policy", "Not present"),
+            "X-Content-Type-Options": headers.get("X-Content-Type-Options", "Not present"),
+            "X-Frame-Options": headers.get("X-Frame-Options", "Not present"),
+            "Strict-Transport-Security": headers.get("Strict-Transport-Security", "Not present"),
+        }
+        return security_headers
+    except Exception as e:
+        logging.error(f"Error checking security headers for {url}: {e}")
+    return {"error": str(e)}
+
+
+# Function to check for the presence of sensitive files
+def check_sensitive_files(url: str) -> List[str]:
+    """
+    Check for the presence of sensitive files.
+
+    :param url: URL to check
+    :return: List of sensitive files found
+    """
+    sensitive_files = []
+    files_to_check = ["robots.txt", "sitemap.xml", ".env", ".git/config", ".htaccess"]
+    for file in files_to_check:
+        try:
+            response = requests.get(urljoin(url, file))
+            if response.status_code == 200:
+                sensitive_files.append(file)
+        except Exception as e:
+            logging.error(f"Error checking sensitive file {file} for {url}: {e}")
+    return sensitive_files
+
+
+# Function to check for CSRF vulnerabilities
+def check_csrf(url: str) -> bool:
+    """
+    Check for CSRF vulnerabilities.
+
+    :param url: URL to check
+    :return: True if CSRF vulnerability is detected, False otherwise
+    """
+    try:
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        forms = soup.find_all('form')
+        for form in forms:
+            if not form.find('input', {'name': 'csrf_token'}):
+                return True
+        return False
+    except Exception as e:
+        logging.error(f"Error checking CSRF for {url}: {e}")
+    return False
+
+
+# Function to check for Clickjacking vulnerabilities
+def check_clickjacking(url: str) -> bool:
+    """
+    Check for Clickjacking vulnerabilities.
+
+    :param url: URL to check
+    :return: True if Clickjacking vulnerability is detected, False otherwise
+    """
+    try:
+        response = requests.get(url)
+        headers = response.headers
+        if headers.get("X-Frame-Options") not in ["DENY", "SAMEORIGIN"]:
+            return True
+        return False
+    except Exception as e:
+        logging.error(f"Error checking Clickjacking for {url}: {e}")
+    return False
+
+
+# Function to check for Directory Traversal vulnerabilities
+def check_directory_traversal(url: str) -> bool:
+    """
+    Check for Directory Traversal vulnerabilities.
+
+    :param url: URL to check
+    :return: True if Directory Traversal vulnerability is detected, False otherwise
+    """
+    payloads = ["../../../../etc/passwd", "../../../../etc/shadow"]
+    for payload in payloads:
+        try:
+            response = requests.get(urljoin(url, payload))
+            if "root:" in response.text:
+                return True
+        except Exception as e:
+            logging.error(f"Error checking Directory Traversal for {url} with payload {payload}: {e}")
+    return False
+
+
+# Function to check for File Inclusion vulnerabilities
+def check_file_inclusion(url: str) -> bool:
+    """
+    Check for File Inclusion vulnerabilities.
+
+    :param url: URL to check
+    :return: True if File Inclusion vulnerability is detected, False otherwise
+    """
+    payloads = ["?file=../../../../etc/passwd", "?page=../../../../etc/passwd"]
+    for payload in payloads:
+        try:
+            response = requests.get(urljoin(url, payload))
+            if "root:" in response.text:
+                return True
+        except Exception as e:
+            logging.error(f"Error checking File Inclusion for {url} with payload {payload}: {e}")
+    return False
+
+
+# Function to check for Server-Side Request Forgery (SSRF) vulnerabilities
+def check_ssrf(url: str) -> bool:
+    """
+    Check for SSRF vulnerabilities.
+
+    :param url: URL to check
+    :return: True if SSRF vulnerability is detected, False otherwise
+    """
+    payloads = ["?url=http://169.254.169.254/latest/meta-data/", "?url=http://localhost"]
+    for payload in payloads:
+        try:
+            response = requests.get(urljoin(url, payload))
+            if "Amazon" in response.text or "localhost" in response.text:
+                return True
+        except Exception as e:
+            logging.error(f"Error checking SSRF for {url} with payload {payload}: {e}")
+    return False
+
+
+# Function to check for XML External Entity (XXE) vulnerabilities
+def check_xxe(url: str) -> bool:
+    """
+    Check for XXE vulnerabilities.
+
+    :param url: URL to check
+    :return: True if XXE vulnerability is detected, False otherwise
+    """
+    payload = """<?xml version="1.0" encoding="ISO-8859-1"?>
+    <!DOCTYPE foo [ <!ELEMENT foo ANY >
+    <!ENTITY xxe SYSTEM "file:///etc/passwd" >]>
+    <foo>&xxe;</foo>"""
+    try:
+        headers = {"Content-Type": "application/xml"}
+        response = requests.post(url, data=payload, headers=headers)
+        if "root:" in response.text:
+            return True
+    except Exception as e:
+        logging.error(f"Error checking XXE for {url}: {e}")
+    return False
+
+
+# Function to check for Insecure Deserialization vulnerabilities
+def check_insecure_deserialization(url: str) -> bool:
+    """
+    Check for Insecure Deserialization vulnerabilities.
+
+    :param url: URL to check
+    :return: True if Insecure Deserialization vulnerability is detected, False otherwise
+    """
+    payload = '{"username":"admin","password":"admin"}'
+    try:
+        headers = {"Content-Type": "application/json"}
+        response = requests.post(url, data=payload, headers=headers)
+        if "admin" in response.text:
+            return True
+    except Exception as e:
+        logging.error(f"Error checking Insecure Deserialization for {url}: {e}")
+    return False
+
+
+# Function to scan a website for vulnerabilities
+def scan_website(url: str) -> Dict[str, Any]:
+    """
+    Scan a website for common vulnerabilities.
+
+    :param url: URL of the website to scan
+    :return: Dictionary containing scan results
+    """
+    results = {
+        "url": url,
+        "ip": resolve_domain_to_ip(url),
+        "sql_injection": check_sql_injection(url),
+        "xss": check_xss(url),
+        "insecure_code": check_insecure_code(url),
+        "ssl_tls": check_ssl_tls(url),
+        "security_headers": check_security_headers(url),
+        "sensitive_files": check_sensitive_files(url),
+        "csrf": check_csrf(url),
+        "clickjacking": check_clickjacking(url),
+        "directory_traversal": check_directory_traversal(url),
+        "file_inclusion": check_file_inclusion(url),
+        "ssrf": check_ssrf(url),
+        "xxe": check_xxe(url),
+        "insecure_deserialization": check_insecure_deserialization(url),
+    }
+    return results
+
+
 # Main function
 def main():
     parser = argparse.ArgumentParser(description=_("Advanced Port Scanner"))
-    parser.add_argument("targets", help=_("Target IP addresses (comma-separated or CIDR)"))
+    parser.add_argument("targets", help=_("Target IP addresses or domain names (comma-separated or CIDR)"))
     parser.add_argument("-p", "--ports", help=_("Port range (e.g., 1-100) or specific ports (e.g., 80,443)"),
                         default="1-1024")
     parser.add_argument("-t", "--type", help=_("Scan type (tcp, udp, syn)"), default="tcp")
@@ -1148,19 +1633,17 @@ def main():
                         action="store_true")
     parser.add_argument("--generate-historical-report", help=_("Generate a historical report based on past scans"),
                         action="store_true")
+    parser.add_argument("--scan-website", help=_("Scan a website for vulnerabilities"), action="store_true")
 
     args = parser.parse_args()
 
-    # Set language
     if args.language:
         gettext.translation('messages', LOCALE_DIR, languages=[args.language]).install()
 
-    # Load configuration from file
     if args.config:
         config = load_config(args.config)
         if config:
             logging.info(_("Loaded config from {}").format(args.config))
-            # Apply configuration from file
             targets = config.get("targets", [])
             ports = config.get("ports", "1-1024")
             scan_type = config.get("type", "tcp")
@@ -1171,21 +1654,18 @@ def main():
         else:
             logging.error(_("Failed to load config file."))
 
-    # Start Tor if enabled
     tor_process = None
     if args.use_tor:
         tor_process = start_tor()
         if tor_process:
             logging.info(_("Tor is running."))
 
-    # Read target list from file or argument
     if args.input:
         with open(args.input, 'r') as f:
             targets = [line.strip() for line in f.readlines()]
     else:
         targets = args.targets.split(',')
 
-    # Expand CIDR to list of IPs
     expanded_targets = []
     for target in targets:
         if '/' in target:
@@ -1193,7 +1673,6 @@ def main():
         else:
             expanded_targets.append(target)
 
-    # Filter IPs by country
     if args.country_filter:
         filtered_targets = []
         for ip in expanded_targets:
@@ -1202,19 +1681,16 @@ def main():
                 filtered_targets.append(ip)
         expanded_targets = filtered_targets
 
-    # Read ports
     if ',' in args.ports:
         ports = list(map(int, args.ports.split(',')))
     else:
         start_port, end_port = map(int, args.ports.split('-'))
         ports = range(start_port, end_port + 1)
 
-    # Filter ports
     if args.filter_ports:
         filter_ports = list(map(int, args.filter_ports.split(',')))
         ports = [port for port in ports if port in filter_ports]
 
-    # Filter protocols
     if args.filter_protocols:
         filter_protocols = args.filter_protocols.split(',')
         if "tcp" not in filter_protocols:
@@ -1222,11 +1698,9 @@ def main():
 
     all_results = []
 
-    # Distributed scan
     if args.distributed:
         workers = args.distributed.split(',')
         all_results = distributed_scan(expanded_targets, ports, args.type, args.timeout, args.max_threads, workers)
-    # Async scan
     elif args.async_scan:
         loop = asyncio.get_event_loop()
         for target in expanded_targets:
@@ -1235,7 +1709,6 @@ def main():
                 async_full_scan(target, ports, args.type, args.timeout, args.max_threads, args.version_detection,
                                 args.os_detection, args.random_scan, args.priority_scan))
             all_results.extend(results)
-    # Normal scan
     else:
         for target in expanded_targets:
             logging.info(_("Scanning target: {}").format(target))
@@ -1245,114 +1718,93 @@ def main():
                                 args.os_detection, args.random_scan, args.priority_scan, args.custom_scan)
             all_results.extend(results)
 
-    # Analyze data
     analysis = analyze_data(all_results)
     logging.info(_("Analysis: {}").format(analysis))
 
-    # Encrypt data if enabled
     if args.encrypt_data:
         encrypted_results = encrypt_data(json.dumps(all_results))
         if encrypted_results:
             logging.info(_("Data has been encrypted."))
 
-    # Save results
     if args.output:
         save_results(all_results, args.output, analysis)
 
-    # Generate charts
     if args.generate_charts:
         create_charts(all_results, args.output)
 
-    # Create IP location map
     create_ip_map(all_results)
 
-    # Schedule automatic scans
     if args.schedule:
         schedule.every().hour.do(scheduled_scan, args.config)
         while True:
             schedule.run_pending()
             time.sleep(1)
 
-    # Advanced data analysis with machine learning
     if args.advanced_analysis:
         model = advanced_data_analysis(all_results)
         if model:
             logging.info(_("Advanced data analysis completed."))
 
-    # Detect suspicious traffic
     if args.detect_suspicious_traffic:
         suspicious_traffic = detect_suspicious_traffic(all_results)
         if suspicious_traffic:
             logging.info(_("Suspicious traffic patterns detected: {}").format(suspicious_traffic))
 
-    # Detect anomalous behavior
     suspicious_traffic = detect_anomalies(all_results)
     if suspicious_traffic:
         logging.info(_("Suspicious traffic detected: {}").format(suspicious_traffic))
 
-    # Generate security recommendations
     recommendations = generate_security_recommendations(analysis)
     if recommendations:
         logging.info(_("Security recommendations: {}").format(recommendations))
 
-    # Predict potential attacks
     attack_model = predict_attacks(all_results)
     if attack_model:
         logging.info(_("Attack prediction model trained successfully."))
 
-    # Load testing
     if args.load_test:
-        target_ip = expanded_targets[0]  # Use the first target for load testing
-        target_port = ports[0]  # Use the first port for load testing
+        target_ip = expanded_targets[0]
+        target_port = ports[0]
         load_test(target_ip, target_port, duration=60, rate=100)
 
-    # Evaluate server capacity
     if args.evaluate_capacity:
-        target_ip = expanded_targets[0]  # Use the first target for capacity evaluation
-        target_port = ports[0]  # Use the first port for capacity evaluation
+        target_ip = expanded_targets[0]
+        target_port = ports[0]
         evaluate_server_capacity(target_ip, target_port, max_rate=1000, step=100)
 
-    # Check Modbus protocol
     if args.check_modbus:
-        target_ip = expanded_targets[0]  # Use the first target for Modbus check
+        target_ip = expanded_targets[0]
         check_modbus(target_ip)
 
-    # Check MQTT protocol
     if args.check_mqtt:
-        target_ip = expanded_targets[0]  # Use the first target for MQTT check
+        target_ip = expanded_targets[0]
         check_mqtt(target_ip)
 
-    # Check CoAP protocol
     if args.check_coap:
-        target_ip = expanded_targets[0]  # Use the first target for CoAP check
+        target_ip = expanded_targets[0]
         asyncio.run(check_coap(target_ip))
 
-    # Check encryption protocols
     if args.check_encryption:
-        target_ip = expanded_targets[0]  # Use the first target for encryption check
-        for port in [22, 443, 8443]:  # Ports for SSH, HTTPS, and TLS
+        target_ip = expanded_targets[0]
+        for port in [22, 443, 8443]:
             check_encryption_protocols(target_ip, port)
 
-    # Identify vulnerable ports
     if args.identify_vulnerable_ports:
         vulnerable_ports = identify_vulnerable_ports(all_results)
         if vulnerable_ports:
             logging.info(_("Vulnerable ports detected: {}").format(vulnerable_ports))
 
-    # Identify insecure configuration files
     if args.identify_insecure_configs:
-        target_ip = expanded_targets[0]  # Use the first target for insecure config check
+        target_ip = expanded_targets[0]
         insecure_files = identify_insecure_config_files(target_ip)
         if insecure_files:
             logging.info(_("Insecure configuration files detected: {}").format(insecure_files))
 
-    # Identify management ports
     if args.identify_management_ports:
         management_ports = identify_management_ports(all_results)
         if management_ports:
             logging.info(_("Open management ports detected: {}").format(management_ports))
 
-    # Check IPs against local threat intelligence
     if args.threat_intelligence:
         for target in expanded_targets:
             if check_threat_intelligence(target):
@@ -1361,19 +1813,16 @@ def main():
                     send_email_alert("Malicious IP Detected", f"IP {target} is flagged as malicious.")
                     send_webhook_alert(f"Malicious IP Detected: {target}")
 
-    # Identify IoT devices
     if args.identify_iot_devices:
         iot_devices = identify_iot_devices(all_results)
         if iot_devices:
             logging.info(_("IoT devices detected: {}").format(iot_devices))
 
-    # Evaluate IoT vulnerabilities
     if args.evaluate_iot_vulnerabilities:
         iot_vulnerabilities = evaluate_iot_vulnerabilities(all_results)
         if iot_vulnerabilities:
             logging.info(_("IoT vulnerabilities detected: {}").format(iot_vulnerabilities))
 
-    # Compare with previous scan
     if args.compare_previous:
         previous_results_file = "previous_scan_results.json"
         if os.path.exists(previous_results_file):
@@ -1383,7 +1832,6 @@ def main():
         else:
             logging.warning(_("No previous scan results found for comparison."))
 
-    # Generate historical report
     if args.generate_historical_report:
         scan_history_file = "scan_history.json"
         if os.path.exists(scan_history_file):
@@ -1393,7 +1841,13 @@ def main():
         else:
             logging.warning(_("No scan history found for generating historical report."))
 
-    # Stop Tor if enabled
+    if args.scan_website:
+        for target in expanded_targets:
+            if target.startswith("http://") or target.startswith("https://"):
+                website_results = scan_website(target)
+                logging.info(f"Website scan results for {target}: {website_results}")
+                all_results.append(website_results)
+
     if tor_process:
         tor_process.terminate()
         logging.info(_("Tor has been stopped."))

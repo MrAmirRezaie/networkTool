@@ -1,6 +1,7 @@
 # Advanced Port Scanner
 
-- This script is an advanced port scanner that allows you to identify open, closed, and filtered ports on one or more specified targets. It supports various scanning techniques such as TCP, UDP, and SYN scans, and offers advanced features like service version detection, OS detection, distributed scanning, and machine learning-based data analysis.
+This script is an advanced port scanner that allows you to identify open, closed, and filtered ports on one or more specified targets. It supports various scanning techniques such as TCP, UDP, and SYN scans, and offers advanced features like service version detection, OS detection, distributed scanning, and machine learning-based data analysis.
+
 ---
 
 ## Key Features
@@ -14,6 +15,7 @@
 - **Alerting**: Send alerts via email or webhook.
 - **IoT Device Identification**: Identify IoT devices based on open ports.
 - **Vulnerability Assessment**: Evaluate vulnerabilities in IoT devices and open ports.
+
 ---
 
 ## Installation
@@ -23,152 +25,158 @@
     ```bash
     pip install -r requirements.txt
     ```
-- **OR**
+    **OR**
     ```bash
     pip install --break-system-packages -r requirements.txt
     ```
+
 ---
 
 ## Usage
+
 - The script is executed via the command line and supports numerous options. Below are some commands and examples:
+
 ---
 
-- **Basic Scan**:
-  - To scan a target with the default port range (1-1024):
-      ```bash
-      python main.py 192.168.1.1
-      ```
+### **Basic Scan**:
+- To scan a target with the default port range (1-1024):
+    ```bash
+    python main.py 192.168.1.1
+    ```
 
-- **Scan with Specific Port Range**:
-  - To scan a target with a specific port range:
-      ```bash
-      python main.py 192.168.1.1 -p 1-1000
-      ```
-        
-- **Scan with Specific Type**:
-  - To scan with a specific type (e.g., UDP):
-      ```bash
-      python main.py 192.168.1.1 -t udp
-      ```
+### **Scan with Specific Port Range**:
+- To scan a target with a specific port range:
+    ```bash
+    python main.py 192.168.1.1 -p 1-1000
+    ```
 
-- **Scan with Service Version Detection**:
-  - To scan with service version detection:
-      ```bash
-      python main.py 192.168.1.1 -V
-      ```
-        
-- **Scan with OS Detection**:
-  - To scan with OS detection:
-      ```bash
-      python main.py 192.168.1.1 -O
-      ```
-        
-- **Distributed Scan**:
-  - To perform a distributed scan using multiple workers:
-      ```bash
-      python main.py 192.168.1.1 --distributed 192.168.1.2,192.168.1.3
-      ```
-        
-- **Use Tor**:
-  - To perform an anonymous scan using Tor:
-      ```bash
-      python main.py 192.168.1.1 --use-tor
-      ```
-        
-- **Send Alerts**:
-  - To send alerts via email or webhook:
-      ```bash
-      python main.py 192.168.1.1 --send-alerts
-      ```
-        
-- **Identify IoT Devices**:
-  - To identify IoT devices:
-      ```bash
-      python main.py 192.168.1.1 --identify-iot-devices
-      ```
+### **Scan with Specific Type**:
+- To scan with a specific type (e.g., UDP):
+    ```bash
+    python main.py 192.168.1.1 -t udp
+    ```
 
-- **Evaluate IoT Vulnerabilities**:
-  - To evaluate IoT device vulnerabilities:
-      ```bash
-      python main.py 192.168.1.1 --evaluate-iot-vulnerabilities
-      ```
-- **Machine Learning Analysis**:
-  - To perform machine learning-based data analysis:
-      ```bash
-      python main.py 192.168.1.1 --advanced-analysis
-      ```
+### **Scan with Service Version Detection**:
+- To scan with service version detection:
+    ```bash
+    python main.py 192.168.1.1 -V
+    ```
 
-- **Rate-Limited Scan**:
-  - To perform a rate-limited scan (e.g., 10 requests per second):
-      ```bash
-      python main.py 192.168.1.1 --rate-limit 10
-      ```
+### **Scan with OS Detection**:
+- To scan with OS detection:
+    ```bash
+    python main.py 192.168.1.1 -O
+    ```
 
-- **Save Results**:
-  - To save scan results to a file:
-      ```bash
-      python main.py 192.168.1.1 -o results.json
-      ```
+### **Distributed Scan**:
+- To perform a distributed scan using multiple workers:
+    ```bash
+    python main.py 192.168.1.1 --distributed 192.168.1.2,192.168.1.3
+    ```
 
-- **Generate Charts**:
-    - To generate charts from scan results:
-      ```bash
-      python main.py 192.168.1.1 --generate-charts
-      ```
-        
-- **Scheduled Scan**:
-  - To perform a scheduled scan (e.g., every hour):
-      ```bash
-      python main.py 192.168.1.1 --schedule 1h
-      ```
+### **Use Tor**:
+- To perform an anonymous scan using Tor:
+    ```bash
+    python main.py 192.168.1.1 --use-tor
+    ```
 
-- **Identify Management Ports**:
-  - To identify open management ports:
-      ```bash
-      python main.py 192.168.1.1 --identify-management-ports
-      ```
-        
-- **Identify Insecure Configuration Files**:
-  - To identify insecure configuration files:
-      ```bash
-      python main.py 192.168.1.1 --identify-insecure-configs
-      ```
+### **Send Alerts**:
+- To send alerts via email or webhook:
+    ```bash
+    python main.py 192.168.1.1 --send-alerts
+    ```
 
-- **Check Encryption Protocols**:
-  - To check encryption protocols (SSH, HTTPS, TLS):
-      ```bash
-      python main.py 192.168.1.1 --check-encryption
-      ```
+### **Identify IoT Devices**:
+- To identify IoT devices:
+    ```bash
+    python main.py 192.168.1.1 --identify-iot-devices
+    ```
 
-- **Check Modbus Protocol**:
-  - To check the Modbus protocol:
-      ```bash
-      python main.py 192.168.1.1 --check-modbus
-      ```
-        
-- **Check MQTT Protocol**:
-  - To check the MQTT protocol:
-      ```bash
-      python main.py 192.168.1.1 --check-mqtt
-      ```
-        
-- **Check CoAP Protocol**:
-  - To check the CoAP protocol:
-      ```bash
-      python main.py 192.168.1.1 --check-coap
-      ```
+### **Evaluate IoT Vulnerabilities**:
+- To evaluate IoT device vulnerabilities:
+    ```bash
+    python main.py 192.168.1.1 --evaluate-iot-vulnerabilities
+    ```
 
-- **Compare with Previous Scan**:
-  - To compare current scan results with a previous scan:
-      ```bash
-      python main.py 192.168.1.1 --compare-previous
-      ```
-        
-- **Generate Historical Report**:
-  - To generate a historical report based on past scans:
-      ```bash
-      python main.py 192.168.1.1 --generate-historical-report
-      ```
+### **Machine Learning Analysis**:
+- To perform machine learning-based data analysis:
+    ```bash
+    python main.py 192.168.1.1 --advanced-analysis
+    ```
+
+### **Rate-Limited Scan**:
+- To perform a rate-limited scan (e.g., 10 requests per second):
+    ```bash
+    python main.py 192.168.1.1 --rate-limit 10
+    ```
+
+### **Save Results**:
+- To save scan results to a file:
+    ```bash
+    python main.py 192.168.1.1 -o results.json
+    ```
+
+### **Generate Charts**:
+- To generate charts from scan results:
+    ```bash
+    python main.py 192.168.1.1 --generate-charts
+    ```
+
+### **Scheduled Scan**:
+- To perform a scheduled scan (e.g., every hour):
+    ```bash
+    python main.py 192.168.1.1 --schedule 1h
+    ```
+
+### **Identify Management Ports**:
+- To identify open management ports:
+    ```bash
+    python main.py 192.168.1.1 --identify-management-ports
+    ```
+
+### **Identify Insecure Configuration Files**:
+- To identify insecure configuration files:
+    ```bash
+    python main.py 192.168.1.1 --identify-insecure-configs
+    ```
+
+### **Check Encryption Protocols**:
+- To check encryption protocols (SSH, HTTPS, TLS):
+    ```bash
+    python main.py 192.168.1.1 --check-encryption
+    ```
+
+### **Check Modbus Protocol**:
+- To check the Modbus protocol:
+    ```bash
+    python main.py 192.168.1.1 --check-modbus
+    ```
+
+### **Check MQTT Protocol**:
+- To check the MQTT protocol:
+    ```bash
+    python main.py 192.168.1.1 --check-mqtt
+    ```
+
+### **Check CoAP Protocol**:
+- To check the CoAP protocol:
+    ```bash
+    python main.py 192.168.1.1 --check-coap
+    ```
+
+### **Compare with Previous Scan**:
+- To compare current scan results with a previous scan:
+    ```bash
+    python main.py 192.168.1.1 --compare-previous
+    ```
+
+### **Generate Historical Report**:
+- To generate a historical report based on past scans:
+    ```bash
+    python main.py 192.168.1.1 --generate-historical-report
+    ```
+
+---
 
 ## Command-Line Options
 
@@ -219,33 +227,38 @@
 | `--evaluate-iot-vulnerabilities` | Evaluate IoT vulnerabilities |
 | `--compare-previous` | Compare current scan results with a previous scan |
 | `--generate-historical-report` | Generate a historical report based on past scans |
+| `--scan-website` | Scan a website for vulnerabilities |
+
+---
 
 ## Examples
 
-- Scan a Target with Port Range 1-1000 and Save Results to JSON
-  ```bash
-  python main.py 192.168.1.1 -p 1-1000 -o results.json
-  ```
+- **Scan a Target with Port Range 1-1000 and Save Results to JSON**:
+    ```bash
+    python main.py 192.168.1.1 -p 1-1000 -o results.json
+    ```
 
-- Distributed Scan Using Two Workers
+- **Distributed Scan Using Two Workers**:
     ```bash
     python main.py 192.168.1.1 --distributed 192.168.1.2,192.168.1.3
     ```
-    
-- Scan with Service Version and OS Detection
+
+- **Scan with Service Version and OS Detection**:
     ```bash
     python main.py 192.168.1.1 -V -O
     ```
-    
-- Scan Using Tor and Send Alerts
+
+- **Scan Using Tor and Send Alerts**:
     ```bash
     python main.py 192.168.1.1 --use-tor --send-alerts
     ```
-    
-- Scheduled Scan Every Hour
+
+- **Scheduled Scan Every Hour**:
     ```bash
     python main.py 192.168.1.1 --schedule 1h
     ```
+
+---
 
 ## Security Notes
 
@@ -253,12 +266,16 @@
 - Ensure you have permission from the target system owner before scanning.
 - Using Tor may reduce scan speed but increases anonymity.
 
+---
+
 ## Contributing
 
 - If you would like to contribute to the development of this project, please submit a Pull Request or report new Issues.
 
+---
+
 ## License
-    
+
 - This project is licensed under the MIT License. For more information, see the [LICENSE](https://github.com/MrAmirRezaie/networkTool/blob/main/LICENSE) file.
 
 ## Contact
